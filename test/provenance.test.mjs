@@ -10,6 +10,7 @@ import {
   isSeqRangePair,
 } from "../src/provenance.mjs";
 import { SESSION_FORMAT_VERSION, SUPPORTS_NATIVE_SEQ_RANGES } from "../src/runtime.mjs";
+import { MIGRATES_V0_ON_LOAD } from "../src/migrate.mjs";
 
 const OFFICIAL_SESSION =
   "/home/ming/.nvm/versions/node/v22.19.0/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-session/lib/index.js";
@@ -71,8 +72,10 @@ test("decode flags compressed sourceEventSeqs as newer-format-ranges, not corrup
     assert.ok(decoded.issues.some((i) => i.code === "newer-format-ranges"));
     assert.equal(plan.mustWrite, true);
     assert.ok(plan.actions.some((a) => a.code === "newer-format-ranges"));
-    assert.deepEqual(plan.events[2].sourceEventSeqs, [0, 1]);
     assert.equal(hasCompressedSeqRanges(plan.events), false);
+    // A migrating host also re-cites chunk provenance (the citation points at
+    // non-chunk seqs here); a v0-only host leaves the now-dense citation as-is.
+    assert.deepEqual(plan.events[2].sourceEventSeqs, MIGRATES_V0_ON_LOAD ? [] : [0, 1]);
   }
 });
 
@@ -98,10 +101,16 @@ test("repair expansion is lossless for inclusive [start,end]", () => {
 
 test("expanded events pass official foldSurface", async (t) => {
   let foldSurface;
+  let official;
   try {
-    ({ foldSurface } = await import(OFFICIAL_SESSION));
+    official = await import(OFFICIAL_SESSION);
+    foldSurface = official.foldSurface;
   } catch {
     t.skip("official dsh-session not installed");
+    return;
+  }
+  if (official.SESSION_FORMAT_VERSION !== 0) {
+    t.skip("this runtime migrates v0 instead of folding it (assistant/message embeds its stream)");
     return;
   }
   const events = [

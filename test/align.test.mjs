@@ -123,7 +123,11 @@ test("known event types match official catalog when present", async (t) => {
     t.skip("official known-event-types not resolvable");
     return;
   }
-  const { KNOWN_SESSION_EVENT_TYPES } = await import("../src/known-types.mjs");
+  const { KNOWN_SESSION_EVENT_TYPES, KNOWN_SESSION_EVENT_TYPES_SOURCE } = await import("../src/known-types.mjs");
+  if (KNOWN_SESSION_EVENT_TYPES_SOURCE === "fallback") {
+    t.skip("installed runtime catalog not resolvable; bundled fallback is intentionally older");
+    return;
+  }
   assert.deepEqual([...KNOWN_SESSION_EVENT_TYPES].sort(), [...official.KNOWN_SESSION_EVENT_TYPES].sort());
 });
 

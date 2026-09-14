@@ -218,11 +218,14 @@ function patchSource(event, patch) {
 }
 
 /**
- * Apply every migration refusal fix. Caller decides gating; `expandRanges`
- * additionally expands compressed sourceEventSeqs (reuses provenance).
- * Throws RangeError from the range expander when a range is too large.
+ * Apply every migration refusal fix. The caller decides gating:
+ * `expandRanges` additionally expands compressed sourceEventSeqs (reuses
+ * provenance); `converters` gates the v0→v1 converter fixes themselves —
+ * a v0-only host needs the range expansion but must keep the rest of the
+ * file byte-for-byte (minimal repair). Throws RangeError from the range
+ * expander when a range is too large.
  */
-export function applyMigrationFixes(events, { expandRanges = false } = {}) {
+export function applyMigrationFixes(events, { expandRanges = false, converters = true } = {}) {
   if (!Array.isArray(events)) return { value: events, actions: [] };
   const actions = [];
   let value = events;
@@ -239,6 +242,8 @@ export function applyMigrationFixes(events, { expandRanges = false } = {}) {
       });
     }
   }
+
+  if (!converters) return { value, actions };
 
   const presetHits = presetExtraMemberHits(value);
   if (presetHits.length > 0) {

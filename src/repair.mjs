@@ -127,12 +127,15 @@ export function planRepair(decoded, { steps: stepOverrides } = {}) {
     }
   }
 
-  if (steps.compressedRanges && decoded.health === "newer-format-ranges" ||
-      (steps.v0Migration && MIGRATES_V0_ON_LOAD &&
-       typeof decoded.health === "string" && decoded.health.startsWith("v0-"))) {
+  const rangeFix = steps.compressedRanges && decoded.health === "newer-format-ranges";
+  const converterFix =
+    steps.v0Migration && MIGRATES_V0_ON_LOAD &&
+    typeof decoded.health === "string" && decoded.health.startsWith("v0-");
+  if (rangeFix || converterFix) {
     try {
       const fixed = applyMigrationFixes(events, {
-        expandRanges: steps.compressedRanges && decoded.health === "newer-format-ranges",
+        expandRanges: rangeFix,
+        converters: converterFix,
       });
       events = fixed.value;
       actions.push(...fixed.actions);

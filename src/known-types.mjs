@@ -78,10 +78,15 @@ const installed = await installedCatalog();
 export const KNOWN_SESSION_EVENT_TYPES = installed.catalog;
 export const KNOWN_SESSION_EVENT_TYPES_SOURCE = installed.source;
 
+// A v0 artifact may legitimately carry types the current catalog retired
+// (assistant/chunk on 0.1.5+). Classification accepts either vocabulary; the
+// exact catalog stays available for downgrade-shim gating.
+const KNOWN_OR_LEGACY = new Set([...installed.catalog, ...FALLBACK_SESSION_EVENT_TYPES]);
+
 /** True when `type` (or `event.type`) is in this build's session vocabulary. */
 export function isKnownEventType(typeOrEvent) {
   const type = typeof typeOrEvent === "string" ? typeOrEvent : typeOrEvent?.type;
-  return typeof type === "string" && KNOWN_SESSION_EVENT_TYPES.has(type);
+  return typeof type === "string" && KNOWN_OR_LEGACY.has(type);
 }
 
 /** True when the event envelope carries the official `ignorable: true` marker. */

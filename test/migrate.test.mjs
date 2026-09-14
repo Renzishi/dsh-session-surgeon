@@ -53,7 +53,7 @@ test("descriptor version 2 is detected and bumped to 3", () => {
   assert.equal(value[3].data.mode, "child");
 });
 
-test("plugin source without form gains notice form; wrong-form summary is dropped", () => {
+test("plugin source form is aligned to its members; members are kept", () => {
   const events = [
     ...BASE,
     ev("user/message", 3, {
@@ -64,12 +64,79 @@ test("plugin source without form gains notice form; wrong-form summary is droppe
     }, { surfaceOp: "append" }),
   ];
   const hits = pluginSourceFormHits(events);
-  assert.equal(hits.length, 2);
+  assert.deepEqual(hits, [
+    { seq: 2, setForm: "notice" },
+    { seq: 3, setForm: "notice" },
+  ]);
   const { value } = applyMigrationFixes(events, {});
   assert.equal(value[2].data.source.form, "notice");
   assert.equal(value[2].data.source.summary, "imported");
-  assert.equal(value[3].data.source.form, "relay");
-  assert.equal(Object.hasOwn(value[3].data.source, "summary"), false);
+  assert.equal(value[3].data.source.form, "notice");
+  assert.equal(value[3].data.source.summary, "s");
+});
+
+test("summary+sections pair conflict drops only the extra member", () => {
+  const events = [
+    ...BASE,
+    ev("user/message", 3, {
+      id: "u3",
+      role: "user",
+      source: { kind: "plugin", plugin: "p", form: "notice", summary: "s", sections: [{ type: "text", text: "x" }] },
+      content: [{ type: "text", text: "hi" }],
+    }, { surfaceOp: "append" }),
+  ];
+  assert.deepEqual(pluginSourceFormHits(events), [
+    { seq: 2, setForm: "notice" },
+    { seq: 3, drop: "sections" },
+  ]);
+  const { value } = applyMigrationFixes(events, {});
+  assert.equal(value[3].data.source.form, "notice");
+  assert.equal(value[3].data.source.summary, "s");
+  assert.equal(Object.hasOwn(value[3].data.source, "sections"), false);
+});
+
+test("llm/retry closes the attempt; provenance spanning the retry is flagged", () => {
+  const events = [
+    ev("turn/start", 0, { turn: 1 }),
+    chunk(1, 1, 1, "a1"),
+    ev("assistant/chunk", 2, { turn: 1, step: 1, chunk: { type: "finish", reason: { kind: "tool-calls" } } }),
+    ev("llm/retry", 3, { turn: 1, step: 1, reason: {} }),
+    ev("llm/retry-started", 4, { turn: 1, step: 1 }),
+    chunk(5, 1, 1, "b1"),
+    chunk(6, 1, 1, "b2"),
+    ev("assistant/message", 7, {
+      turn: 1,
+      step: 1,
+      message: {
+        id: "a1",
+        role: "assistant",
+        source: { kind: "model", provider: "p", model: "m" },
+        content: [{ type: "text", text: "b1b2" }],
+      },
+    }, { surfaceOp: "append", sourceEventSeqs: [1, 2, 5, 6] }),
+  ];
+  const hits = chunkProvenanceHits(events);
+  assert.deepEqual(hits, [{ seq: 7, expect: [5, 6] }]);
+  const { value } = applyMigrationFixes(events, {});
+  assert.deepEqual(value[7].sourceEventSeqs, [5, 6]);
+});
+
+test("replacement messages citing shadowed surface nodes are never rewritten", () => {
+  const events = [
+    ...BASE,
+    ev("assistant/message", 3, {
+      turn: 20,
+      step: 2,
+      message: { id: "a1", role: "assistant", content: [] },
+    }, {
+      sourceEventSeqs: [179132, 179133],
+      surfaceOp: { op: "replace", start: 179132, end: 179133 },
+    }),
+  ];
+  assert.deepEqual(chunkProvenanceHits(events), []);
+  const { value, actions } = applyMigrationFixes(events, {});
+  assert.deepEqual(value[3].sourceEventSeqs, [179132, 179133]);
+  assert.ok(!actions.some((a) => a.code === "v0-chunk-provenance"));
 });
 
 test("chunk provenance must cite the complete ordered run; repair rewrites it", () => {

@@ -9,6 +9,7 @@ import { applyMigrationFixes, MIGRATES_V0_ON_LOAD } from "./migrate.mjs";
 import { applyForwardEventShims } from "./forward-events.mjs";
 import { disambiguateDuplicateToolCallIds } from "./duplicates.mjs";
 import { wrapFlatReplayStates } from "./replay-state.mjs";
+import { INSTALLED_CATALOG } from "./runtime.mjs";
 
 const DEFAULT_STEPS = {
   tornTail: true,
@@ -109,7 +110,10 @@ export function planRepair(decoded, { steps: stepOverrides } = {}) {
     }
   }
 
-  if (steps.forwardEvents && decoded.unknownTypes?.includes("model/selection")) {
+  const shimWanted = INSTALLED_CATALOG
+    ? !INSTALLED_CATALOG.has("model/selection")
+    : decoded.unknownTypes?.includes("model/selection");
+  if (steps.forwardEvents && shimWanted) {
     const shimmed = applyForwardEventShims(events);
     if (shimmed.shims.length > 0) {
       events = shimmed.value;

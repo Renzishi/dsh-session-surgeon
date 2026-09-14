@@ -27,6 +27,11 @@ All notable user-facing changes to dsh-session-surgeon. Dates are UTC.
 
 ### Fixed
 
+- `v0-chunk-provenance` missed attempts split by `llm/retry` / `llm/retry-started` ([#3](https://github.com/xiaoshenming/dsh-session-surgeon/issues/3)): the chunk-attempt group now resets exactly where the official v1→v2 `closesAttempt` does (`turn/end` / `step/end` / `llm/retry` / `llm/retry-started`), so a message citing chunks from both sides of a retry is flagged and re-cited to the surviving attempt. Replacement messages (`/rewind` markers, `surfaceOp` replace) are never rewritten — their `sourceEventSeqs` are the shadowed surface nodes `applySurface` requires.
+- `v0-plugin-source-form` repair now aligns the display-only `form` (`notice` for `summary`, `snapshot` for `sections`) instead of deleting the member; only a genuine summary+sections conflict drops one of them ([#6194](https://github.com/deepseek-ai/deepseek-harness/discussions/6194), reporter-confirmed `summary requires notice form`).
+- The `model/selection` downgrade shim is gated on the **installed** runtime's catalog: a host that knows the type never gets `ignorable` stamped, even when the plugin falls back to its bundled vocabulary ([#3](https://github.com/xiaoshenming/dsh-session-surgeon/issues/3)). Catalog resolution additionally probes beside the running executable, so DSH Desktop installs resolve it without a PATH `dsh`.
+- Unknown-type classification accepts either the installed catalog or the legacy v0 vocabulary, so 0.1.5 hosts no longer flag retired-but-legal v0 types such as `assistant/chunk`.
+- Sidebar collapse: the entry button's label now hides via `body[data-dsh-sidebar-collapsed]`, matching what dsh-better-sidebar actually sets ([#4](https://github.com/xiaoshenming/dsh-session-surgeon/issues/4) / [#5](https://github.com/xiaoshenming/dsh-session-surgeon/issues/5)).
 - Windows `--apply` no longer aborts with `EPERM` when fsyncing the read-only `.bak.<utc>` handle ([#4178](https://github.com/deepseek-ai/deepseek-harness/discussions/4178) / [#1452](https://github.com/deepseek-ai/deepseek-harness/discussions/1452)).
 
 ### Not in scope (still refuse / warn only)

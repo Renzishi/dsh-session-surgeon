@@ -10,7 +10,14 @@ import { pathToFileURL } from "node:url";
 
 export function dshRequires() {
   const requires = [createRequire(import.meta.url)];
-  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+  const dirs = (process.env.PATH ?? "").split(delimiter);
+  if (process.execPath) {
+    // Desktop/Electron hosts run the plugin beside the app's node_modules;
+    // PATH may not contain the dsh launcher there (Windows, issue #3).
+    const exeDir = dirname(process.execPath);
+    dirs.push(exeDir, dirname(exeDir));
+  }
+  for (const dir of dirs) {
     if (dir === "") continue;
     const candidate = join(dir, process.platform === "win32" ? "dsh.cmd" : "dsh");
     if (!existsSync(candidate)) continue;
@@ -54,6 +61,12 @@ export const SESSION_FORMAT_VERSION =
 export const MIGRATION_REFUSES_DUPLICATE_TOOL_CALL_IDS = SESSION_FORMAT_VERSION >= 1;
 
 export const SESSION_MODULE_PATH = session?.root ?? null;
+
+/** The installed runtime's own event catalog, or null when unresolvable. */
+export const INSTALLED_CATALOG =
+  session?.loaded?.KNOWN_SESSION_EVENT_TYPES instanceof Set
+    ? session.loaded.KNOWN_SESSION_EVENT_TYPES
+    : null;
 
 /** Catalog path used by known-types.mjs (types/known-event-types.js). */
 export function catalogModulePath(sessionRoot) {

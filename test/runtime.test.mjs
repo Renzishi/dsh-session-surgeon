@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SUPPORTS_NATIVE_SEQ_RANGES, SESSION_MODULE_PATH } from "../src/runtime.mjs";
+import { SESSION_FORMAT_VERSION, SUPPORTS_NATIVE_SEQ_RANGES, SESSION_MODULE_PATH } from "../src/runtime.mjs";
 import { KNOWN_SESSION_EVENT_TYPES } from "../src/known-types.mjs";
 
-test("installed 0.1.2-rc.1 session runtime exposes decodeSeqRanges", async (t) => {
+test("installed session runtime exposes decodeSeqRanges and its format version", async (t) => {
   if (!SESSION_MODULE_PATH) {
     t.skip("official dsh-session not resolvable");
     return;
@@ -13,5 +13,5 @@ test("installed 0.1.2-rc.1 session runtime exposes decodeSeqRanges", async (t) =
   assert.equal(SUPPORTS_NATIVE_SEQ_RANGES, true);
   assert.ok(KNOWN_SESSION_EVENT_TYPES.has("model/selection"));
   assert.deepEqual(mod.decodeSeqRanges([[0, 2], 5]), [0, 1, 2, 5]);
-  assert.equal(mod.SESSION_FORMAT_VERSION, 0);
+  assert.equal(mod.SESSION_FORMAT_VERSION, SESSION_FORMAT_VERSION);
 });

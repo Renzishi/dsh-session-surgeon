@@ -73,14 +73,13 @@ export function pluginSourceFormHits(events) {
       const summary = Object.hasOwn(source, "summary");
       const sections = Object.hasOwn(source, "sections");
       if (!summary && !sections) continue;
-      if (source.form === undefined) {
-        hits.push({ seq: event.seq, fix: sections ? "snapshot" : "notice" });
-        continue;
-      }
-      const wants = [];
-      if (source.form !== "notice" && summary) wants.push("-summary");
-      if (source.form !== "snapshot" && sections) wants.push("-sections");
-      if (wants.length > 0) hits.push({ seq: event.seq, fix: wants.join("") });
+      // summary requires form "notice", sections requires form "snapshot".
+      // Aligning the display-only form keeps the member; only a genuine
+      // member pair conflict (both present) has to drop one of them.
+      if (!sections) hits.push({ seq: event.seq, setForm: "notice" });
+      else if (!summary) hits.push({ seq: event.seq, setForm: "snapshot" });
+      else if (source.form === "notice") hits.push({ seq: event.seq, drop: "sections" });
+      else hits.push({ seq: event.seq, setForm: "snapshot", drop: "summary" });
     }
   }
   return hits;
@@ -90,6 +89,23 @@ function assistantTurnStep(event) {
   const data = record(event.data);
   if (!data) return null;
   return { turn: data.turn, step: data.step };
+}
+
+// Official v1→v2 closesAttempt: the chunk-attempt group restarts after these.
+function closesAttempt(event) {
+  return (
+    event.type === "turn/end" ||
+    event.type === "step/end" ||
+    event.type === "llm/retry" ||
+    event.type === "llm/retry-started"
+  );
+}
+
+// /rewind-style replacement messages cite the shadowed surface nodes, not
+// chunks; applySurface requires exactly those citations (issue #3, defect 2).
+function isReplaceSurfaceOp(surfaceOp) {
+  if (surfaceOp === "replace") return true;
+  return record(surfaceOp)?.op === "replace";
 }
 
 /**
@@ -103,6 +119,10 @@ export function chunkProvenanceHits(events) {
   if (!Array.isArray(events)) return hits;
   let pending = null;
   for (const event of events) {
+    if (closesAttempt(event)) {
+      pending = null;
+      continue;
+    }
     if (event?.type === "assistant/chunk") {
       const pos = assistantTurnStep(event);
       if (!pos) continue;
@@ -113,6 +133,7 @@ export function chunkProvenanceHits(events) {
       continue;
     }
     if (event?.type !== "assistant/message") continue;
+    if (isReplaceSurfaceOp(event.surfaceOp)) continue;
     const pos = assistantTurnStep(event);
     if (!pos) continue;
     const same = pending && pending.turn === pos.turn && pending.step === pos.step;
@@ -248,16 +269,15 @@ export function applyMigrationFixes(events, { expandRanges = false } = {}) {
 
   const formHits = pluginSourceFormHits(value);
   if (formHits.length > 0) {
-    const bySeq = new Map(formHits.map((hit) => [hit.seq, hit.fix]));
+    const bySeq = new Map(formHits.map((hit) => [hit.seq, hit]));
     value = value.map((event) => {
-      const fix = bySeq.get(event.seq);
-      if (fix === undefined) return event;
+      const hit = bySeq.get(event.seq);
+      if (hit === undefined) return event;
       for (const source of userMessageSources(event)) {
         if (typeof source.plugin !== "string" || source.plugin === "") continue;
-        if (fix === "snapshot" || fix === "notice") return patchSource(event, { form: fix });
         const patch = {};
-        if (fix.includes("-summary")) patch.summary = undefined;
-        if (fix.includes("-sections")) patch.sections = undefined;
+        if (hit.setForm !== undefined) patch.form = hit.setForm;
+        if (hit.drop !== undefined) patch[hit.drop] = undefined;
         return patchSource(event, patch);
       }
       return event;

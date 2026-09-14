@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { decodeSessionBuffer } from "../src/decode.mjs";
 import { encodeSession } from "../src/encode.mjs";
 import { planRepair } from "../src/repair.mjs";
+import { INSTALLED_CATALOG } from "../src/runtime.mjs";
 
 const header = {
   version: 0,
@@ -39,6 +40,11 @@ test("model/selection gets a lossless older-harness shim", async () => {
 
   const plan = planRepair(before);
   assert.equal(plan.refuse, undefined);
+  if (INSTALLED_CATALOG?.has("model/selection")) {
+    assert.ok(!plan.actions.some((action) => action.code === "forward-event-shim"));
+    assert.equal(plan.events[2].ignorable, undefined);
+    return;
+  }
   assert.equal(plan.mustWrite, true);
   assert.deepEqual(plan.events[2], { ...events[2], ignorable: true });
   assert.ok(plan.actions.some((action) => action.code === "forward-event-shim"));
